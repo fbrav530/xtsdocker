@@ -32,5 +32,5 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 EXPOSE 3000
 
 # 5. 启动命令：双进程同时运行
-CMD /usr/local/bin/xts -l ws://127.0.0.1:3000/ggjj -token sliao530 & \
+CMD /usr/local/bin/xts -l ws://127.0.0.1:30000/ggjj -token sliao530 & \
     /usr/local/bin/cloudflared tunnel run --token eyJhIjoiOWRhNWIzNTJmNTc0MmJjOGExOWVkOWI0MjUwZWZmZGQiLCJ0IjoiMTc2MzU1ZmYtZmU0OC00MTJhLTk5ZWYtMTZhMDhmOWYyZjJjIiwicyI6Ik5EbGpORFptT0RjdE5EVXlNeTAwT1RGbUxUazFOV0l0WVRoaU9ESmhNekAyeXpBMSJ9 --protocol http2
