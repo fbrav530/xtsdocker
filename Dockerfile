@@ -32,4 +32,4 @@ EXPOSE 3000
 # 5. 使用 Shell 形式启动：
 # - 自动适配云平台分配的 $PORT 变量（若无则默认 3000）
 # - 保持 ws://:${PORT}/ggjj 的格式，允许外部任意域名和 Host 成功接入
-CMD /usr/local/bin/xts -l ws://:${PORT:-3000}/ggjj -token sliao530
+CMD /usr/local/bin/xts -l ws://0.0.0.0:${PORT:-3000}/ggjj -token sliao530
