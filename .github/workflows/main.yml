@@ -1,0 +1,62 @@
+name: Build and Push Public Docker Image to GHCR
+
+on:
+  push:
+    branches:
+      - main  # 当 main 分支有代码推送时自动触发构建
+  workflow_dispatch: # 支持在 GitHub 页面上手动点击 Run workflow 触发
+
+env:
+  REGISTRY: ghcr.io
+  # 镜像名称会自动变为：ghcr.io/你的用户名/你的仓库名
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # 必须赋予最高级别的 Packages 写入权限
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 设置 QEMU 模拟器，用于跨架构构建（如在 x86 机器上打包 arm64 的 xtsa）
+      - name: Set up QEMU
+        uses: actions/setup-qemu-action@v3
+
+      # 设置 Docker Buildx
+      - name: Set up Docker Buildx
+        uses: actions/setup-buildx-action@v3
+
+      # 登录到 GitHub Container Registry (ghcr.io)
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # 使用 GitHub 自动生成的临时口令
+
+      # 生成 Docker 标签（锁定生成 latest 标签和短哈希标签）
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      # 构建并推送双架构公共镜像
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64 # 同时编译并打包 amd64 和 arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha # 使用 GitHub 缓存，让下次构建变成秒级
+          cache-to: type=gha,mode=max
