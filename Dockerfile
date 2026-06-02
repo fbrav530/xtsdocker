@@ -6,15 +6,11 @@ ARG TARGETARCH
 
 WORKDIR /app
 
-# 2. 安装 Alpine 必备依赖
-# ca-certificates: 用于网络证书校验
-# gcompat & libc6-compat: 核心兼容层，确保非静态编译的 glibc 二进制文件能在 Alpine 下正常运行
-RUN apk add --no-cache ca-certificates gcompat libc6-compat
+# 2. 安装 Alpine 必备依赖（增加了 wget 用于下载 cloudflared）
+RUN apk add --no-cache ca-certificates gcompat libc6-compat wget
 
-# 3. 复制你手动上传到仓库的二进制文件
+# 3. 处理你手动上传的 xts 二进制文件
 COPY xts xtsa ./
-
-# 4. 根据当前编译的架构，把正确的二进制文件移动到系统目录
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
         echo "当前编译环境为 amd64，正在打包 xts..." && \
         mv xts /usr/local/bin/xts && rm -f xtsa; \
@@ -26,10 +22,21 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     fi && \
     chmod +x /usr/local/bin/xts
 
-# 声明端口
+# 4. 自动识别架构并下载 Cloudflare 官方最新版 cloudflared 二进制文件
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        echo "正在下载 Linux amd64 版 cloudflared..." && \
+        wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        echo "正在下载 Linux arm64 版 cloudflared..." && \
+        wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64; \
+    fi && \
+    chmod +x /usr/local/bin/cloudflared
+
+# 容器内监听 3000 端口
 EXPOSE 3000
 
-# 5. 使用 Shell 形式启动：
-# - 自动适配云平台分配的 $PORT 变量（若无则默认 3000）
-# - 保持 ws://:${PORT}/ggjj 的格式，允许外部任意域名和 Host 成功接入
-CMD /usr/local/bin/xts -l ws://0.0.0.0:${PORT:-3000}/ggjj -token sliao530
+# 5. 同时启动两个程序：
+# - xts 放在后台运行 (&) 监听本地 3000 端口
+# - cloudflared 在前台运行，负责建立隧道并保持容器不退出
+CMD /usr/local/bin/xts -l ws://127.0.0.1:3000/ggjj -token sliao530 & \
+    /usr/local/bin/cloudflared tunnel run --token eyJhIjoiOWRhNWIzNTJmNTc0MmJjOGExOWVkOWI0MjUwZWZmZGQiLCJ0IjoiMTc2MzU1ZmYtZmU0OC00MTJhLTk5ZWYtMTZhMDhmOWYyZjJjIiwicyI6Ik5EbGpORFptT0RjdE5EVXlNeTAwT1RGbUxUazFOV0l0WVRoaU9ESmhNekAyeXpBMSJ9
