@@ -6,37 +6,31 @@ ARG TARGETARCH
 
 WORKDIR /app
 
-# 2. 安装 Alpine 必备依赖（增加了 wget 用于下载 cloudflared）
-RUN apk add --no-cache ca-certificates gcompat libc6-compat wget
+# 2. 安装 Alpine 必备依赖（增加了 unzip 用于解压压缩包）
+RUN apk add --no-cache ca-certificates gcompat libc6-compat unzip
 
-# 3. 处理你手动上传的 xts 二进制文件
-COPY xts xtsa ./
+# 3. 将仓库里所有的 .zip 压缩包复制到容器中
+COPY *.zip ./
+
+# 4. 根据当前编译的架构，动态解压对应的文件，并规范命名移动到系统目录
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        echo "当前编译环境为 amd64，正在打包 xts..." && \
-        mv xts /usr/local/bin/xts && rm -f xtsa; \
+        echo "正在解压并配置 amd64 架构资源..." && \
+        unzip -q xts.zip && mv xts /usr/local/bin/xts && \
+        unzip -q cf.zip && (mv cf /usr/local/bin/cloudflared || mv cloudflared* /usr/local/bin/cloudflared); \
     elif [ "$TARGETARCH" = "arm64" ]; then \
-        echo "当前编译环境为 arm64，正在打包 xtsa..." && \
-        mv xtsa /usr/local/bin/xts && rm -f xts; \
+        echo "正在解压并配置 arm64 架构资源..." && \
+        unzip -q xtsa.zip && (mv xtsa /usr/local/bin/xts || mv xts /usr/local/bin/xts) && \
+        unzip -q cfa.zip && (mv cfa /usr/local/bin/cloudflared || mv cloudflared* /usr/local/bin/cloudflared); \
     else \
         echo "不支持的架构: $TARGETARCH" && exit 1; \
     fi && \
-    chmod +x /usr/local/bin/xts
+    # 赋予执行权限并清理残留的压缩包
+    chmod +x /usr/local/bin/xts /usr/local/bin/cloudflared && \
+    rm -f /app/*.zip
 
-# 4. 自动识别架构并下载 Cloudflare 官方最新版 cloudflared 二进制文件
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        echo "正在下载 Linux amd64 版 cloudflared..." && \
-        wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64; \
-    elif [ "$TARGETARCH" = "arm64" ]; then \
-        echo "正在下载 Linux arm64 版 cloudflared..." && \
-        wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64; \
-    fi && \
-    chmod +x /usr/local/bin/cloudflared
-
-# 容器内监听 3000 端口
+# 声明端口
 EXPOSE 3000
 
-# 5. 同时启动两个程序：
-# - xts 放在后台运行 (&) 监听本地 3000 端口
-# - cloudflared 在前台运行，负责建立隧道并保持容器不退出
+# 5. 启动命令：双进程同时运行
 CMD /usr/local/bin/xts -l ws://127.0.0.1:3000/ggjj -token sliao530 & \
-    /usr/local/bin/cloudflared tunnel run --token eyJhIjoiOWRhNWIzNTJmNTc0MmJjOGExOWVkOWI0MjUwZWZmZGQiLCJ0IjoiMTc2MzU1ZmYtZmU0OC00MTJhLTk5ZWYtMTZhMDhmOWYyZjJjIiwicyI6Ik5EbGpORFptT0RjdE5EVXlNeTAwT1RGbUxUazFOV0l0WVRoaU9ESmhNekAyeXpBMSJ9
+    /usr/local/bin/cloudflared tunnel run --token eyJhIjoiOWRhNWIzNTJmNTc0MmJjOGExOWVkOWI0MjUwZWZmZGQiLCJ0IjoiMTc2MzU1ZmYtZmU0OC00MTJhLTk5ZWYtMTZhMDhmOWYyZjJjIiwicyI6Ik5EbGpORFptT0RjdE5EVXlNeTAwT1RGbUxUazFOV0l0WVRoaU9ESmhNekAyeXpBMSJ9 --protocol http2
